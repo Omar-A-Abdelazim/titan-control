@@ -109,6 +109,10 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
 #canvas3d { width: 100%; aspect-ratio: 4 / 3; max-height: 640px; border-radius: 10px; background: var(--bg); touch-action: none; display: block; }
 .hint3d { position: absolute; inset-inline-start: 26px; bottom: 26px; font-size: 12px; color: var(--muted); background: var(--surface);
   border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
+.sim-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hud { position: absolute; inset-inline-end: 26px; top: 26px; font-size: 13px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.hud b { font-family: var(--font-mono); direction: ltr; unicode-bidi: isolate; }
 .fallback { padding: 40px 16px; text-align: center; color: var(--muted); }
 .water { stroke-dasharray: 6 7; animation: flow .6s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -13; } }
@@ -135,7 +139,7 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
           <span>الاستيك اليمين<br>طلوع/نزول + انزلاق</span>
         </div>
       </div>
-      <p class="sub">اسحب الدايرة الزرقا، أو دبل كليك عليها ترجّعها للنص.</p>
+      <p class="sub">اسحب الدايرة الزرقا، أو دبل كليك عليها ترجّعها للنص. ولو وصلت دراع PS4 بالكمبيوتر، هيحرّك المحاكاة على طول.</p>
 
       <div class="slider-row"><label for="inForward">لقدام / لورا</label><input id="inForward" type="range" min="-100" max="100" value="100"><output id="outForward"></output></div>
       <div class="slider-row"><label for="inRight">انزلاق يمين / شمال</label><input id="inRight" type="range" min="-100" max="100" value="0"><output id="outRight"></output></div>
@@ -165,7 +169,11 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
         <div class="summary"><span>الحركة الناتجة:</span><b id="summary"></b></div>
       </div>
       <div class="card view-bar">
-        <span class="sub">طريقة العرض</span>
+        <div class="sim-btns">
+          <button type="button" id="btnSim" class="primary">⏸ وقّف الحركة</button>
+          <button type="button" id="btnReset">رجّع الـ ROV للبداية</button>
+          <span class="pill stop" id="padStatus">الدراع مش متوصل</span>
+        </div>
         <div class="seg" role="group" aria-label="طريقة العرض">
           <button type="button" id="btn3d" aria-pressed="true">3D</button>
           <button type="button" id="btn2d" aria-pressed="false">2D</button>
@@ -173,7 +181,8 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
       </div>
       <div class="card" id="view3d">
         <div id="canvas3d" aria-label="مجسم 3D للـ ROV بالثراسترات والأسهم" role="img"></div>
-        <span class="hint3d">اسحب بالماوس عشان تلف • العجلة للتقريب • كليك يمين للتحريك</span>
+        <span class="hint3d">اسحب بالماوس عشان تلف الكاميرا • العجلة للتقريب • المحاكاة تقريبية للتوضيح</span>
+        <div class="hud" id="hud"></div>
       </div>
       <div class="diagrams" id="view2d" hidden>
         <div class="card">
@@ -545,19 +554,37 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
   const materials = { hull: mat(0xffffff, { transparent: true, opacity: 0.22 }), tube: mat(0xffffff, { transparent: true, opacity: 0.35 }),
     thr: mat(0xffffff), water: mat(0xffffff, { emissive: 0x000000 }), result: mat(0xffffff) };
   const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
-  const grid = new THREE.GridHelper(8, 16); grid.position.y = -0.9; scene.add(grid);
+  const SEABED = -0.9, SURFACE = 7;
+  const grid = new THREE.GridHelper(120, 120); grid.position.y = SEABED; scene.add(grid);
+  // Landmarks so you can see the ROV moving
+  const markMat = mat(0xffffff);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 70; i++) {
+    const h = 0.4 + rnd() * 2.2, x = (rnd() - 0.5) * 100, z = (rnd() - 0.5) * 100;
+    if (Math.hypot(x, z) < 5) continue;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, h, 10), markMat);
+    post.position.set(x, SEABED + h / 2, z); scene.add(post);
+  }
+  const surface = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, side: THREE.DoubleSide }));
+  surface.rotation.x = -Math.PI / 2; surface.position.y = SURFACE; scene.add(surface);
+  const TRAIL_N = 600, trailPos = new Float32Array(TRAIL_N * 3);
+  const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3)); trailGeo.setDrawRange(0, 0);
+  const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+  scene.add(new THREE.Line(trailGeo, trailMat));
+  scene.fog = new THREE.Fog(0xffffff, 18, 60);
 
+  const rov = new THREE.Group(); scene.add(rov);
   // Hull: frame box + electronics tube + battery tube
   const hullGeo = new THREE.BoxGeometry(2.24, 0.7, 3.3);
-  scene.add(new THREE.Mesh(hullGeo, materials.hull));
-  scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(hullGeo), lineMat));
+  rov.add(new THREE.Mesh(hullGeo, materials.hull));
+  rov.add(new THREE.LineSegments(new THREE.EdgesGeometry(hullGeo), lineMat));
   const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 2.5, 32), materials.tube);
-  tube.rotation.x = Math.PI / 2; tube.position.y = 0.08; scene.add(tube);
+  tube.rotation.x = Math.PI / 2; tube.position.y = 0.08; rov.add(tube);
   const batt = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.6, 24), materials.tube);
-  batt.rotation.x = Math.PI / 2; batt.position.set(0, -0.22, 0.2); scene.add(batt);
+  batt.rotation.x = Math.PI / 2; batt.position.set(0, -0.22, 0.2); rov.add(batt);
   // Nose marker
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.36, 24), materials.thr);
-  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0, -1.92); scene.add(nose);
+  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0, -1.92); rov.add(nose);
 
   function label(text, size = 44) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 96;
@@ -570,14 +597,14 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     sp.draw = (color) => { g.clearRect(0, 0, 256, 96); g.fillStyle = color; g.fillText(sp.userData.text, 128, 50); tex.needsUpdate = true; };
     return sp;
   }
-  const noseLabel = label('المقدمة', 40); noseLabel.position.set(0, 0.35, -2.35); scene.add(noseLabel);
+  const noseLabel = label('المقدمة', 40); noseLabel.position.set(0, 0.35, -2.35); rov.add(noseLabel);
 
   const UP = new THREE.Vector3(0, 1, 0);
   function makeArrow(radius) {
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 });
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 14), m);
     const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 2.6, radius * 6, 22), m);
-    const g = new THREE.Group(); g.add(shaft, head); g.userData = { shaft, head, m, radius }; scene.add(g);
+    const g = new THREE.Group(); g.add(shaft, head); g.userData = { shaft, head, m, radius }; rov.add(g);
     return g;
   }
   function setArrow(a, origin, dir, length) {
@@ -594,15 +621,15 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.42, 24), materials.thr); g.add(body);
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 16), materials.thr); cap.position.y = 0.21; g.add(cap);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 10, 32), materials.thr); ring.rotation.x = Math.PI / 2; ring.position.y = -0.25; g.add(ring);
-    g.position.copy(pos); g.quaternion.setFromUnitVectors(UP, front); scene.add(g);
+    g.position.copy(pos); g.quaternion.setFromUnitVectors(UP, front); rov.add(g);
     const force = makeArrow(0.04);
     const particles = [];
     for (let k = 0; k < 9; k++) {
       const p = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), materials.water);
-      p.userData.phase = k / 9; scene.add(p); particles.push(p);
+      p.userData.phase = k / 9; rov.add(p); particles.push(p);
     }
-    const lab = label(name); lab.position.copy(pos).add(new THREE.Vector3(0, 0.55, 0)); scene.add(lab);
-    const state = label('', 34); state.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0)); scene.add(state);
+    const lab = label(name); lab.position.copy(pos).add(new THREE.Vector3(0, 0.55, 0)); rov.add(lab);
+    const state = label('', 34); state.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0)); rov.add(state);
     thrusters.push({ pos, front, force, particles, lab, state, v: 0 });
   }
   for (let i = 0; i < 4; i++) {
@@ -617,7 +644,7 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
   const RES_ORIGIN = new THREE.Vector3(0, 0.6, 0);
   let yaw = null;
   function setYaw(tn) {
-    if (yaw) { scene.remove(yaw); yaw.traverse(o => o.geometry && o.geometry.dispose()); yaw = null; }
+    if (yaw) { rov.remove(yaw); yaw.traverse(o => o.geometry && o.geometry.dispose()); yaw = null; }
     if (Math.abs(tn) < 0.02) return;
     const R = 1.15, y = 1.0, sweep = Math.min(Math.abs(tn), 1) * 1.15 * Math.PI, sg = Math.sign(tn);
     const pts = [];
@@ -627,7 +654,7 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     yaw.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.05, 8, false), materials.result));
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.32, 20), materials.result);
     cone.position.copy(pts[pts.length - 1]); cone.quaternion.setFromUnitVectors(UP, curve.getTangent(1));
-    yaw.add(cone); scene.add(yaw);
+    yaw.add(cone); rov.add(yaw);
   }
 
   function applyColors() {
@@ -639,6 +666,8 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     colorArrow(resArrow, colors.result);
     grid.material.color = new THREE.Color(colors['hull-edge']); grid.material.opacity = 0.35; grid.material.transparent = true;
     noseLabel.draw(colors.muted);
+    markMat.color.set(colors['hull-edge']); surface.material.color.set(colors.water); trailMat.color.set(colors.result);
+    scene.fog.color.set(css('--bg'));
     thrusters.forEach(t => t.lab.draw(colors.ink));
     if (window.ROV.last) window.update3D(window.ROV.last.m, window.ROV.last.ph);
   }
@@ -672,6 +701,53 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
   }
   new ResizeObserver(resize).observe(box);
 
+  // ---------- Simulation (approximate, for understanding only) ----------
+  const MAXV = 3.0, MAXUP = 1.6, MAXYAW = 1.4, TAU = 0.6;   // units/s, units/s, rad/s, response time
+  const sim = { vf: 0, vr: 0, vu: 0, yr: 0 };
+  let simOn = true, trailCount = 0, lastTrail = new THREE.Vector3(0, 99, 0);
+  const hud = document.getElementById('hud');
+  function stepSim(dt) {
+    const ph = window.ROV.last ? window.ROV.last.ph : { fwd: 0, right: 0, turn: 0, up: 0 };
+    const a = 1 - Math.exp(-dt / TAU);
+    sim.vf += (MAXV * ph.fwd / FMAX - sim.vf) * a;
+    sim.vr += (MAXV * ph.right / FMAX - sim.vr) * a;
+    sim.vu += (MAXUP * ph.up - sim.vu) * a;
+    sim.yr += (MAXYAW * (TMAX ? ph.turn / TMAX : 0) - sim.yr) * a;
+    const before = rov.position.clone();
+    const h = rov.rotation.y;
+    const fwd = new THREE.Vector3(-Math.sin(h), 0, -Math.cos(h)), right = new THREE.Vector3(Math.cos(h), 0, -Math.sin(h));
+    rov.position.addScaledVector(fwd, sim.vf * dt).addScaledVector(right, sim.vr * dt);
+    rov.position.y = Math.min(SURFACE - 0.4, Math.max(SEABED + 0.4, rov.position.y + sim.vu * dt));
+    const dYaw = -sim.yr * dt;                         // turn right = clockwise seen from above
+    rov.rotation.y += dYaw;
+    const delta = rov.position.clone().sub(before);    // camera follows the ROV and turns with it
+    controls.target.add(delta);
+    const offset = camera.position.clone().add(delta).sub(controls.target).applyAxisAngle(UP, dYaw);
+    camera.position.copy(controls.target).add(offset);
+    if (rov.position.distanceTo(lastTrail) > 0.15) {
+      lastTrail.copy(rov.position);
+      if (trailCount === TRAIL_N) { trailPos.copyWithin(0, 3); trailCount--; }
+      trailPos.set([rov.position.x, rov.position.y - 0.36, rov.position.z], trailCount * 3);
+      trailCount++; trailGeo.setDrawRange(0, trailCount); trailGeo.attributes.position.needsUpdate = true;
+    }
+    const pct = v => `${v >= 0 ? '' : '−'}${Math.round(Math.abs(v) * 100)}%`;
+    hud.innerHTML = `<span>سرعة لقدام <b>${pct(sim.vf / MAXV)}</b></span><span>سرعة يمين <b>${pct(sim.vr / MAXV)}</b></span>`
+      + `<span>سرعة اللف <b>${pct(sim.yr / MAXYAW)}</b></span><span>العمق <b>${(SURFACE - 0.4 - rov.position.y).toFixed(1)}</b> من سطح المية</span>`;
+  }
+  function resetSim() {
+    const delta = new THREE.Vector3(0, 0, 0).sub(rov.position);
+    rov.position.set(0, 0, 0); rov.rotation.y = 0; Object.keys(sim).forEach(k => sim[k] = 0);
+    camera.position.add(delta); controls.target.add(delta);
+    trailCount = 0; trailGeo.setDrawRange(0, 0); lastTrail.set(0, 99, 0);
+  }
+  const btnSim = document.getElementById('btnSim');
+  btnSim.addEventListener('click', () => {
+    simOn = !simOn;
+    btnSim.textContent = simOn ? '⏸ وقّف الحركة' : '▶ شغّل الحركة';
+    btnSim.classList.toggle('primary', simOn);
+  });
+  document.getElementById('btnReset').addEventListener('click', resetSim);
+
   let t0 = performance.now();
   function frame(now) {
     if (!running) return;
@@ -687,11 +763,33 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
         p.scale.setScalar(1 - 0.6 * p.userData.phase);
       });
     });
+    if (simOn) stepSim(Math.min(dt, 0.05));
     controls.update();
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
   window.start3D = () => { if (running) return; running = true; resize(); t0 = performance.now(); requestAnimationFrame(frame); };
+
+  const padStatus = document.getElementById('padStatus');
+  const DEAD = 0.12;
+  const dz = v => (Math.abs(v) < DEAD ? 0 : Math.sign(v) * (Math.abs(v) - DEAD) / (1 - DEAD));
+  let lastPadKey = '';
+  function pollPad() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const gp = pads[0];
+    if (gp && gp.axes.length >= 4) {
+      padStatus.textContent = 'الدراع متوصل ✓'; padStatus.className = 'pill push';
+      const vals = { inForward: -dz(gp.axes[1]), inTurn: dz(gp.axes[0]), inRight: dz(gp.axes[2]), inUp: -dz(gp.axes[3]) };
+      const key = Object.values(vals).map(v => Math.round(v * 100)).join(',');
+      if (key !== lastPadKey) {
+        lastPadKey = key;
+        for (const [id, v] of Object.entries(vals)) document.getElementById(id).value = Math.round(v * 100);
+        document.getElementById('inForward').dispatchEvent(new Event('input'));
+      }
+    } else { padStatus.textContent = 'الدراع مش متوصل'; padStatus.className = 'pill stop'; }
+    requestAnimationFrame(pollPad);
+  }
+  try { requestAnimationFrame(pollPad); } catch (e) { /* no gamepad support */ }
 
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyColors);
   new MutationObserver(applyColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
