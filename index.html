@@ -39,6 +39,7 @@
   --hull: #1d2c37; --hull-edge: #4a6273; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 20px 48px; display: grid; gap: 18px; }
@@ -100,6 +101,15 @@ pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid va
 .code-row pre { flex: 1; min-width: 240px; }
 ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
 .note { font-size: 13px; color: var(--muted); }
+.view-bar { display: flex; gap: 6px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; direction: ltr; }
+.seg button { border: 0; border-radius: 0; padding: 6px 18px; background: var(--surface); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#view3d { position: relative; }
+#canvas3d { width: 100%; aspect-ratio: 4 / 3; max-height: 640px; border-radius: 10px; background: var(--bg); touch-action: none; display: block; }
+.hint3d { position: absolute; inset-inline-start: 26px; bottom: 26px; font-size: 12px; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
+.fallback { padding: 40px 16px; text-align: center; color: var(--muted); }
 .water { stroke-dasharray: 6 7; animation: flow .6s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -13; } }
 @media (prefers-reduced-motion: reduce) { .water { animation: none; } }
@@ -154,7 +164,18 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
       <div class="card">
         <div class="summary"><span>الحركة الناتجة:</span><b id="summary"></b></div>
       </div>
-      <div class="diagrams">
+      <div class="card view-bar">
+        <span class="sub">طريقة العرض</span>
+        <div class="seg" role="group" aria-label="طريقة العرض">
+          <button type="button" id="btn3d" aria-pressed="true">3D</button>
+          <button type="button" id="btn2d" aria-pressed="false">2D</button>
+        </div>
+      </div>
+      <div class="card" id="view3d">
+        <div id="canvas3d" aria-label="مجسم 3D للـ ROV بالثراسترات والأسهم" role="img"></div>
+        <span class="hint3d">اسحب بالماوس عشان تلف • العجلة للتقريب • كليك يمين للتحريك</span>
+      </div>
+      <div class="diagrams" id="view2d" hidden>
         <div class="card">
           <h2>منظر من فوق (المقدمة لفوق)</h2>
           <svg id="topView" viewBox="-270 -270 540 540" role="img" aria-label="منظر الـ ROV من فوق بالثراسترات والأسهم"></svg>
@@ -162,14 +183,16 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
         <div class="card">
           <h2>منظر من ورا (الموتورز الرأسية)</h2>
           <svg id="rearView" viewBox="-200 -150 400 300" role="img" aria-label="منظر الـ ROV من ورا بالثراسترات الرأسية"></svg>
-          <div class="legend" style="margin-top:10px">
-            <span><i style="background:var(--push)"></i>دفع (الماتور بيزق الـ ROV ناحية مقدمته)</span>
-            <span><i style="background:var(--pull)"></i>سحب (عكس الدفع)</span>
-            <span><i style="background:var(--water)"></i>اتجاه المية اللي بتطلع من الماتور</span>
-            <span><i style="background:var(--result)"></i>السهم الكبير: الحركة الناتجة</span>
-          </div>
-          <p class="note">الجزء المدوّر في رسمة الثراستر هو مقدمته (في T200 ده الجنب اللي السلك داخل منه). الدفع معناه إن الماتور بيرمي المية من ضهره، فالـ ROV يتزق ناحية المقدمة.</p>
         </div>
+      </div>
+      <div class="card">
+        <div class="legend">
+          <span><i style="background:var(--push)"></i>دفع (الماتور بيزق الـ ROV ناحية مقدمته)</span>
+          <span><i style="background:var(--pull)"></i>سحب (عكس الدفع)</span>
+          <span><i style="background:var(--water)"></i>المية اللي بتطلع من الماتور</span>
+          <span><i style="background:var(--result)"></i>السهم الكبير: الحركة الناتجة</span>
+        </div>
+        <p class="note" style="margin:8px 0 0">مقدمة الثراستر هي الجزء المدوّر (في T200 ده الجنب اللي السلك داخل منه). الدفع معناه إن الماتور بيرمي المية من ضهره، فالـ ROV يتزق ناحية المقدمة.</p>
       </div>
     </section>
   </div>
@@ -187,27 +210,6 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     <p class="note" id="normNote"></p>
   </section>
 
-  <section class="card fix">
-    <h2>لو ماتور طلع معكوس في التجربة</h2>
-    <p class="sub">علّم على الماتور اللي بيلف عكس الرسمة. الرسمة هتفضل زي ما هي (ده اللي المفروض يحصل)، والقيمة اللي بتتبعت للماتور ده هتتعكس. بعدها انسخ السطر ده وحطه مكان السطر اللي في كود البايثون.</p>
-    <div class="fix-grid" id="fixGrid"></div>
-    <div class="code-row">
-      <pre id="pyLine"></pre>
-      <button id="copyBtn" type="button">نسخ السطر</button>
-    </div>
-    <p class="note" id="copyMsg" aria-live="polite"></p>
-  </section>
-
-  <section class="card">
-    <h2>تجرب على الـ ROV نفسه إزاي</h2>
-    <ol>
-      <li>ارفع الـ ROV أو حطه في حوض، وخلي إيدك بعيد عن المراوح.</li>
-      <li>دوس هنا على «لقدام»، وزق الاستيك الشمال لقدام على الدراع بنفس الطريقة.</li>
-      <li>بص على كل ماتور: المية لازم تطلع منه في نفس اتجاه السهم السماوي المتقطع اللي في الرسمة.</li>
-      <li>أي ماتور طلع عكس الرسمة: علّم عليه في الجزء اللي فوق، وانسخ سطر <span class="mono">MOTOR_DIRECTION</span> للكود. مش محتاج تغيّر حاجة في الأردوينو.</li>
-      <li>كرر بـ «انزلاق يمين» و«لف يمين». لو التلاتة مظبوطين، يبقى كل الحركات مظبوطة.</li>
-    </ol>
-  </section>
 </div>
 
 <script>
@@ -224,7 +226,8 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     { id: 'M5', place: 'رأسي شمال', blue: 'T5/T6', pins: [43, 44] },
     { id: 'M6', place: 'رأسي يمين', blue: 'T5/T6', pins: [46, 47] },
   ];
-  const direction = [1, 1, 1, 1, 1, 1];   // MOTOR_DIRECTION
+  const direction = [1, 1, 1, 1, 1, 1];   // MOTOR_DIRECTION in the Python code
+  window.ROV = { MOTORS, FACTORS, MAX_SPEED };
 
   // Python round(): half to even
   const pyRound = x => (Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x));
@@ -262,6 +265,7 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
   }
   const FMAX = 4 * S;
   const TMAX = Math.abs(physics(mix(0, 0, 1, 0, 100, 100).intended).turn);
+  Object.assign(window.ROV, { FMAX, TMAX, POS, FRONT, VPOS });
 
   // ===== SVG helpers =====
   const NS = 'http://www.w3.org/2000/svg';
@@ -352,14 +356,6 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     rows.appendChild(tr);
     return tr.children;
   });
-  const fixGrid = document.getElementById('fixGrid');
-  MOTORS.forEach((m, i) => {
-    const lab = document.createElement('label');
-    lab.innerHTML = `<input type="checkbox" id="fix${i}"> ${m.id} معكوس`;
-    fixGrid.appendChild(lab);
-    lab.querySelector('input').addEventListener('change', e => { direction[i] = e.target.checked ? -1 : 1; update(); });
-  });
-
   // ===== Inputs =====
   const $ = id => document.getElementById(id);
   const inputs = { forward: $('inForward'), right: $('inRight'), turn: $('inTurn'), up: $('inUp'), h: $('inH'), v: $('inV') };
@@ -486,7 +482,7 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
         c[4].textContent = `${fmt(u)} × ${Math.trunc(MAX_SPEED * vP / 100)}`;
       }
       const sent = m.sent[i];
-      c[5].innerHTML = `<b>${sent}</b>${direction[i] === -1 ? ' <span class="pill pull">معكوس</span>' : ''}`;
+      c[5].innerHTML = `<b>${sent}</b>`;
       c[6].innerHTML = sent > 0 ? `R (بن <span class="mono">${mo.pins[0]}</span>)` : sent < 0 ? `L (بن <span class="mono">${mo.pins[1]}</span>)` : '—';
       const [txt, cls] = stateText(m.intended[i], i >= 4);
       c[7].innerHTML = `<span class="pill ${cls}">${txt}</span>`;
@@ -494,16 +490,214 @@ ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
     $('normNote').textContent = m.biggest > 1
       ? `F = لقدام، R = انزلاق يمين، T = لف يمين، U = طلوع. أكبر قيمة طلعت ${m.biggest.toFixed(2)} (أكتر من 1)، فالأربع موتورز الأفقية اتقسموا عليها مع بعض عشان النسبة بينهم تفضل صح.`
       : 'F = لقدام، R = انزلاق يمين، T = لف يمين، U = طلوع. مفيش قيمة عدّت 1، فمفيش تقسيم.';
-    $('pyLine').textContent = `MOTOR_DIRECTION =            [${direction.join(', ')}]`;
+    window.ROV.last = { m, ph };
+    if (window.update3D) window.update3D(m, ph);
   }
 
-  $('copyBtn').addEventListener('click', async () => {
-    const text = $('pyLine').textContent;
-    try { await navigator.clipboard.writeText(text); $('copyMsg').textContent = 'اتنسخ. الزقه مكان سطر MOTOR_DIRECTION في كود البايثون.'; }
-    catch { $('copyMsg').textContent = 'المتصفح منع النسخ. حدد السطر وانسخه بإيدك (Ctrl+C).'; }
-  });
-
   update();
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  const btn3d = document.getElementById('btn3d'), btn2d = document.getElementById('btn2d');
+  const view3d = document.getElementById('view3d'), view2d = document.getElementById('view2d');
+  const box = document.getElementById('canvas3d');
+  let running = false;
+
+  function show(mode) {
+    const is3d = mode === '3d';
+    view3d.hidden = !is3d; view2d.hidden = is3d;
+    btn3d.setAttribute('aria-pressed', is3d); btn2d.setAttribute('aria-pressed', !is3d);
+    if (is3d && window.start3D) window.start3D(); else running = false;
+  }
+  btn3d.addEventListener('click', () => show('3d'));
+  btn2d.addEventListener('click', () => show('2d'));
+
+  if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
+    box.outerHTML = '<p class="fallback">العرض الـ 3D محتاج نت عشان يحمّل. اتحوّلت لعرض الـ 2D.</p>';
+    show('2d');
+    return;
+  }
+
+  const { MAX_SPEED, MOTORS, POS, FRONT, VPOS, FMAX, TMAX } = window.ROV;
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Scene (x = right, y = up, -z = forward/nose) ----------
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+  catch (e) { box.outerHTML = '<p class="fallback">المتصفح ده مش بيدعم 3D. استخدم عرض الـ 2D.</p>'; show('2d'); return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  box.appendChild(renderer.domElement);
+  renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 4 / 3, 0.1, 100);
+  camera.position.set(4.2, 3.6, 5.4);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0); controls.enableDamping = true; controls.minDistance = 3; controls.maxDistance = 14;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.9));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(3, 6, 4); scene.add(sun);
+
+  const mat = (color, extra = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.55, metalness: 0.1 }, extra));
+  const colors = {};
+  const materials = { hull: mat(0xffffff, { transparent: true, opacity: 0.22 }), tube: mat(0xffffff, { transparent: true, opacity: 0.35 }),
+    thr: mat(0xffffff), water: mat(0xffffff, { emissive: 0x000000 }), result: mat(0xffffff) };
+  const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
+  const grid = new THREE.GridHelper(8, 16); grid.position.y = -0.9; scene.add(grid);
+
+  // Hull: frame box + electronics tube + battery tube
+  const hullGeo = new THREE.BoxGeometry(2.24, 0.7, 3.3);
+  scene.add(new THREE.Mesh(hullGeo, materials.hull));
+  scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(hullGeo), lineMat));
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 2.5, 32), materials.tube);
+  tube.rotation.x = Math.PI / 2; tube.position.y = 0.08; scene.add(tube);
+  const batt = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.6, 24), materials.tube);
+  batt.rotation.x = Math.PI / 2; batt.position.set(0, -0.22, 0.2); scene.add(batt);
+  // Nose marker
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.36, 24), materials.thr);
+  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0, -1.92); scene.add(nose);
+
+  function label(text, size = 44) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+    const g = c.getContext('2d');
+    g.font = `700 ${size}px "IBM Plex Sans Arabic", Tahoma, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'rtl';
+    const tex = new THREE.CanvasTexture(c);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    sp.scale.set(1.0, 0.375, 1);
+    sp.userData = { c, g, tex, text };
+    sp.draw = (color) => { g.clearRect(0, 0, 256, 96); g.fillStyle = color; g.fillText(sp.userData.text, 128, 50); tex.needsUpdate = true; };
+    return sp;
+  }
+  const noseLabel = label('المقدمة', 40); noseLabel.position.set(0, 0.35, -2.35); scene.add(noseLabel);
+
+  const UP = new THREE.Vector3(0, 1, 0);
+  function makeArrow(radius) {
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 14), m);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(radius * 2.6, radius * 6, 22), m);
+    const g = new THREE.Group(); g.add(shaft, head); g.userData = { shaft, head, m, radius }; scene.add(g);
+    return g;
+  }
+  function setArrow(a, origin, dir, length) {
+    const { shaft, head, radius } = a.userData, hl = radius * 6, sl = Math.max(length - hl, 0.02);
+    shaft.scale.y = sl; shaft.position.y = sl / 2; head.position.y = sl + hl / 2;
+    a.position.copy(origin); a.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
+  }
+  const colorArrow = (a, c) => { a.userData.m.color.set(c); a.userData.m.emissive.set(c); };
+
+  // Thrusters
+  const thrusters = [];
+  function addThruster(pos, front, name) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.42, 24), materials.thr); g.add(body);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 16), materials.thr); cap.position.y = 0.21; g.add(cap);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 10, 32), materials.thr); ring.rotation.x = Math.PI / 2; ring.position.y = -0.25; g.add(ring);
+    g.position.copy(pos); g.quaternion.setFromUnitVectors(UP, front); scene.add(g);
+    const force = makeArrow(0.04);
+    const particles = [];
+    for (let k = 0; k < 9; k++) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), materials.water);
+      p.userData.phase = k / 9; scene.add(p); particles.push(p);
+    }
+    const lab = label(name); lab.position.copy(pos).add(new THREE.Vector3(0, 0.55, 0)); scene.add(lab);
+    const state = label('', 34); state.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0)); scene.add(state);
+    thrusters.push({ pos, front, force, particles, lab, state, v: 0 });
+  }
+  for (let i = 0; i < 4; i++) {
+    const pos = new THREE.Vector3(POS[i][0] / 100, 0, POS[i][1] / 100);
+    const front = new THREE.Vector3(FRONT[i][0], 0, FRONT[i][1]).normalize();
+    addThruster(pos, front, MOTORS[i].id);
+  }
+  for (let i = 0; i < 2; i++) addThruster(new THREE.Vector3(VPOS[i][0] / 100, 0, 0), UP.clone(), MOTORS[4 + i].id);
+
+  // Resultant arrow + yaw arc
+  const resArrow = makeArrow(0.085);
+  const RES_ORIGIN = new THREE.Vector3(0, 0.6, 0);
+  let yaw = null;
+  function setYaw(tn) {
+    if (yaw) { scene.remove(yaw); yaw.traverse(o => o.geometry && o.geometry.dispose()); yaw = null; }
+    if (Math.abs(tn) < 0.02) return;
+    const R = 1.15, y = 1.0, sweep = Math.min(Math.abs(tn), 1) * 1.15 * Math.PI, sg = Math.sign(tn);
+    const pts = [];
+    for (let k = 0; k <= 40; k++) { const a = sg * sweep * k / 40; pts.push(new THREE.Vector3(R * Math.sin(a), y, -R * Math.cos(a))); }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    yaw = new THREE.Group();
+    yaw.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.05, 8, false), materials.result));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.32, 20), materials.result);
+    cone.position.copy(pts[pts.length - 1]); cone.quaternion.setFromUnitVectors(UP, curve.getTangent(1));
+    yaw.add(cone); scene.add(yaw);
+  }
+
+  function applyColors() {
+    for (const k of ['push', 'pull', 'water', 'result', 'ink', 'muted', 'hull', 'hull-edge', 'surface']) colors[k] = css(`--${k}`);
+    materials.hull.color.set(colors.hull); materials.tube.color.set(colors.hull); materials.tube.opacity = 0.6;
+    materials.thr.color.set(colors['hull-edge']); lineMat.color.set(colors['hull-edge']);
+    materials.water.color.set(colors.water); materials.water.emissive.set(colors.water); materials.water.emissiveIntensity = 0.35;
+    materials.result.color.set(colors.result); materials.result.emissive.set(colors.result); materials.result.emissiveIntensity = 0.25;
+    colorArrow(resArrow, colors.result);
+    grid.material.color = new THREE.Color(colors['hull-edge']); grid.material.opacity = 0.35; grid.material.transparent = true;
+    noseLabel.draw(colors.muted);
+    thrusters.forEach(t => t.lab.draw(colors.ink));
+    if (window.ROV.last) window.update3D(window.ROV.last.m, window.ROV.last.ph);
+  }
+
+  window.update3D = (m, ph) => {
+    m.intended.forEach((v, i) => {
+      const t = thrusters[i], k = Math.abs(v) / MAX_SPEED, sg = Math.sign(v);
+      t.v = v;
+      const dir = t.front.clone().multiplyScalar(sg || 1);
+      t.force.visible = v !== 0;
+      if (v !== 0) {
+        setArrow(t.force, t.pos.clone().addScaledVector(dir, 0.3), dir, 0.3 + 0.95 * k);
+        colorArrow(t.force, v > 0 ? colors.push : colors.pull);
+      }
+      t.particles.forEach(p => { p.visible = v !== 0; });
+      const p = Math.round(k * 100), vert = i >= 4;
+      t.state.userData.text = v === 0 ? 'واقف' : vert ? (v > 0 ? `دفع لفوق ${p}%` : `سحب لتحت ${p}%`) : (v > 0 ? `دفع ${p}%` : `سحب ${p}%`);
+      t.state.draw(v > 0 ? colors.push : v < 0 ? colors.pull : colors.muted);
+    });
+    const vec = new THREE.Vector3(ph.right / FMAX, ph.up, -ph.fwd / FMAX);
+    const mag = vec.length();
+    resArrow.visible = mag > 0.03;
+    if (resArrow.visible) setArrow(resArrow, RES_ORIGIN, vec, 0.6 + 1.9 * Math.min(mag, 1.4));
+    setYaw(TMAX ? ph.turn / TMAX : 0);
+  };
+
+  function resize() {
+    const w = box.clientWidth, h = box.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(box);
+
+  let t0 = performance.now();
+  function frame(now) {
+    if (!running) return;
+    const dt = (now - t0) / 1000; t0 = now;
+    thrusters.forEach(t => {
+      if (t.v === 0) return;
+      const k = Math.abs(t.v) / MAX_SPEED, sg = Math.sign(t.v);
+      const back = t.front.clone().multiplyScalar(-sg);             // water leaves opposite to the force
+      const start = t.pos.clone().addScaledVector(back, 0.3), L = 0.35 + 0.9 * k;
+      t.particles.forEach(p => {
+        if (!reduceMotion) p.userData.phase = (p.userData.phase + dt * (0.4 + 1.4 * k)) % 1;
+        p.position.copy(start).addScaledVector(back, p.userData.phase * L);
+        p.scale.setScalar(1 - 0.6 * p.userData.phase);
+      });
+    });
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  window.start3D = () => { if (running) return; running = true; resize(); t0 = performance.now(); requestAnimationFrame(frame); };
+
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyColors);
+  new MutationObserver(applyColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts) document.fonts.ready.then(applyColors);
+  applyColors();
+  show('3d');
 })();
 </script>
 </body>

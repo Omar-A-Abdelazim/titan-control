@@ -1,6 +1,6 @@
 # Titan ROV – Thruster Directions
 
-Interactive page that shows how every thruster of the Titan ROV moves for any joystick input:
+Interactive page (3D and 2D views) that shows how every thruster of the Titan ROV moves for any joystick input:
 whether each motor pushes or pulls water, the value sent to the Arduino, and the resulting motion.
 
 The math is the same as `mix_thrusters()` in the laptop Python code (BlueROV2-style vectored frame:
