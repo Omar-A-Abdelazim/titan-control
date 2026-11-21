@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اتجاهات ثراسترات الـ ROV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: control column + big top-view diagram, then a per-motor table that shows the live equations. */
+:root {
+  --bg: #eef3f6;
+  --surface: #ffffff;
+  --ink: #13222d;
+  --muted: #5a6b78;
+  --line: #d3dde4;
+  --accent: #0c6a80;
+  --push: #1d6fd6;
+  --pull: #e06a22;
+  --result: #c0175d;
+  --water: #2fa7c8;
+  --hull: #dfe7ec;
+  --hull-edge: #9fb2bf;
+  --font-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c141a; --surface: #141f28; --ink: #e4ecf1; --muted: #93a5b2; --line: #263642;
+    --accent: #41b6cc; --push: #5ba3ff; --pull: #ff9b57; --result: #ff5c96; --water: #5fcde8;
+    --hull: #1d2c37; --hull-edge: #4a6273; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c141a; --surface: #141f28; --ink: #e4ecf1; --muted: #93a5b2; --line: #263642;
+  --accent: #41b6cc; --push: #5ba3ff; --pull: #ff9b57; --result: #ff5c96; --water: #5fcde8;
+  --hull: #1d2c37; --hull-edge: #4a6273; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 20px 48px; display: grid; gap: 18px; }
+header h1 { margin: 0; font-size: 26px; font-weight: 700; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.card h2 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+.top { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .top { grid-template-columns: 1fr; } }
+.controls { display: grid; gap: 14px; }
+.pads { display: flex; gap: 14px; justify-content: space-between; direction: ltr; }
+.pads span { direction: rtl; }
+.pad-box { display: grid; gap: 4px; justify-items: center; flex: 1; }
+.pad-box span { font-size: 13px; color: var(--muted); text-align: center; }
+.pad { width: 130px; height: 130px; border-radius: 50%; border: 2px solid var(--line); background:
+  radial-gradient(circle, transparent 0 62px, var(--line) 62px 64px, transparent 64px),
+  linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat,
+  linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat, var(--bg);
+  position: relative; touch-action: none; cursor: grab; }
+.knob { position: absolute; width: 42px; height: 42px; border-radius: 50%; background: var(--accent);
+  left: 50%; top: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 6px rgba(0,0,0,.25); pointer-events: none; }
+.slider-row { display: grid; grid-template-columns: 120px 1fr 52px; gap: 8px; align-items: center; }
+.slider-row label { font-size: 14px; }
+.slider-row output { font-family: var(--font-mono); font-size: 13px; text-align: left; direction: ltr; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); direction: ltr; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font-family: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sub { font-size: 13px; color: var(--muted); margin: 0; }
+.views { display: grid; gap: 12px; }
+.summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 15px; }
+.summary b { font-size: 17px; }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  border: 1px solid currentColor; }
+.pill.push { color: var(--push); } .pill.pull { color: var(--pull); } .pill.stop { color: var(--muted); } .pill.res { color: var(--result); }
+.diagrams { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; }
+@media (max-width: 700px) { .diagrams { grid-template-columns: 1fr; } }
+svg { width: 100%; height: auto; display: block; }
+svg text { font-family: var(--font-body); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-inline-end: 6px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; white-space: nowrap; }
+td.num, td .mono { font-family: var(--font-mono); direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+td.num { text-align: left; white-space: nowrap; }
+.eq { font-family: var(--font-mono); font-size: 12.5px; direction: ltr; text-align: left; white-space: nowrap; color: var(--muted); }
+.eq b { color: var(--ink); font-weight: 600; }
+.fix { display: grid; gap: 10px; }
+.fix-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.fix-grid label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
+pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  font-family: var(--font-mono); font-size: 13px; direction: ltr; text-align: left; overflow-x: auto; }
+.code-row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.code-row pre { flex: 1; min-width: 240px; }
+ol { margin: 0; padding-inline-start: 22px; display: grid; gap: 4px; }
+.note { font-size: 13px; color: var(--muted); }
+.water { stroke-dasharray: 6 7; animation: flow .6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -13; } }
+@media (prefers-reduced-motion: reduce) { .water { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>اتجاهات ثراسترات الـ ROV</h1>
+    <p>حرّك الاستيكات أو السلايدرز، وشوف كل ماتور بيدفع ولا بيسحب المية، والقيمة اللي بتتبعت للأردوينو، والحركة اللي بتطلع في الآخر. الحسابات هنا هي نفس معادلات <span class="mono">mix_thrusters</span> في كود البايثون بالظبط، وترتيب الموتورز زي BlueROV2 (4 أفقي على زاوية 45° و2 رأسي).</p>
+  </header>
+
+  <div class="top">
+    <section class="card controls" aria-label="المدخلات">
+      <h2>المدخلات</h2>
+      <div class="pads">
+        <div class="pad-box">
+          <div class="pad" id="padLeft" aria-hidden="true"><div class="knob" id="knobLeft"></div></div>
+          <span>الاستيك الشمال<br>لقدام/لورا + لف</span>
+        </div>
+        <div class="pad-box">
+          <div class="pad" id="padRight" aria-hidden="true"><div class="knob" id="knobRight"></div></div>
+          <span>الاستيك اليمين<br>طلوع/نزول + انزلاق</span>
+        </div>
+      </div>
+      <p class="sub">اسحب الدايرة الزرقا، أو دبل كليك عليها ترجّعها للنص.</p>
+
+      <div class="slider-row"><label for="inForward">لقدام / لورا</label><input id="inForward" type="range" min="-100" max="100" value="100"><output id="outForward"></output></div>
+      <div class="slider-row"><label for="inRight">انزلاق يمين / شمال</label><input id="inRight" type="range" min="-100" max="100" value="0"><output id="outRight"></output></div>
+      <div class="slider-row"><label for="inTurn">لف يمين / شمال</label><input id="inTurn" type="range" min="-100" max="100" value="0"><output id="outTurn"></output></div>
+      <div class="slider-row"><label for="inUp">طلوع / نزول</label><input id="inUp" type="range" min="-100" max="100" value="0"><output id="outUp"></output></div>
+
+      <div class="chips" role="group" aria-label="حركات جاهزة">
+        <button data-p="100,0,0,0">لقدام</button>
+        <button data-p="-100,0,0,0">لورا</button>
+        <button data-p="0,100,0,0">انزلاق يمين</button>
+        <button data-p="0,-100,0,0">انزلاق شمال</button>
+        <button data-p="0,0,100,0">لف يمين</button>
+        <button data-p="0,0,-100,0">لف شمال</button>
+        <button data-p="0,0,0,100">طلوع</button>
+        <button data-p="0,0,0,-100">نزول</button>
+        <button data-p="100,0,50,0">لقدام + لف يمين</button>
+        <button data-p="0,0,0,0" class="primary">وقف الكل</button>
+      </div>
+
+      <div class="slider-row"><label for="inH">أقصى سرعة أفقي</label><input id="inH" type="range" min="0" max="100" value="100"><output id="outH"></output></div>
+      <div class="slider-row"><label for="inV">أقصى سرعة رأسي</label><input id="inV" type="range" min="0" max="100" value="100"><output id="outV"></output></div>
+      <p class="sub">دول زي HORIZONTAL_SPEED_PERCENT و VERTICAL_SPEED_PERCENT في كود البايثون.</p>
+    </section>
+
+    <section class="views">
+      <div class="card">
+        <div class="summary"><span>الحركة الناتجة:</span><b id="summary"></b></div>
+      </div>
+      <div class="diagrams">
+        <div class="card">
+          <h2>منظر من فوق (المقدمة لفوق)</h2>
+          <svg id="topView" viewBox="-270 -270 540 540" role="img" aria-label="منظر الـ ROV من فوق بالثراسترات والأسهم"></svg>
+        </div>
+        <div class="card">
+          <h2>منظر من ورا (الموتورز الرأسية)</h2>
+          <svg id="rearView" viewBox="-200 -150 400 300" role="img" aria-label="منظر الـ ROV من ورا بالثراسترات الرأسية"></svg>
+          <div class="legend" style="margin-top:10px">
+            <span><i style="background:var(--push)"></i>دفع (الماتور بيزق الـ ROV ناحية مقدمته)</span>
+            <span><i style="background:var(--pull)"></i>سحب (عكس الدفع)</span>
+            <span><i style="background:var(--water)"></i>اتجاه المية اللي بتطلع من الماتور</span>
+            <span><i style="background:var(--result)"></i>السهم الكبير: الحركة الناتجة</span>
+          </div>
+          <p class="note">الجزء المدوّر في رسمة الثراستر هو مقدمته (في T200 ده الجنب اللي السلك داخل منه). الدفع معناه إن الماتور بيرمي المية من ضهره، فالـ ROV يتزق ناحية المقدمة.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>كل ماتور: المعادلة والقيمة اللي بتتبعت</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>الماتور</th><th>مكانه</th><th>BlueROV2</th><th>المعادلة (لقدام، انزلاق، لف)</th><th>بعد التقسيم</th><th>بيتبعت للأردوينو</th><th>البن اللي شغال</th><th>الحالة</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="normNote"></p>
+  </section>
+
+  <section class="card fix">
+    <h2>لو ماتور طلع معكوس في التجربة</h2>
+    <p class="sub">علّم على الماتور اللي بيلف عكس الرسمة. الرسمة هتفضل زي ما هي (ده اللي المفروض يحصل)، والقيمة اللي بتتبعت للماتور ده هتتعكس. بعدها انسخ السطر ده وحطه مكان السطر اللي في كود البايثون.</p>
+    <div class="fix-grid" id="fixGrid"></div>
+    <div class="code-row">
+      <pre id="pyLine"></pre>
+      <button id="copyBtn" type="button">نسخ السطر</button>
+    </div>
+    <p class="note" id="copyMsg" aria-live="polite"></p>
+  </section>
+
+  <section class="card">
+    <h2>تجرب على الـ ROV نفسه إزاي</h2>
+    <ol>
+      <li>ارفع الـ ROV أو حطه في حوض، وخلي إيدك بعيد عن المراوح.</li>
+      <li>دوس هنا على «لقدام»، وزق الاستيك الشمال لقدام على الدراع بنفس الطريقة.</li>
+      <li>بص على كل ماتور: المية لازم تطلع منه في نفس اتجاه السهم السماوي المتقطع اللي في الرسمة.</li>
+      <li>أي ماتور طلع عكس الرسمة: علّم عليه في الجزء اللي فوق، وانسخ سطر <span class="mono">MOTOR_DIRECTION</span> للكود. مش محتاج تغيّر حاجة في الأردوينو.</li>
+      <li>كرر بـ «انزلاق يمين» و«لف يمين». لو التلاتة مظبوطين، يبقى كل الحركات مظبوطة.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ===== Same numbers as the Python code =====
+  const MAX_SPEED = 255;
+  // forward, right, turn-right  (HORIZONTAL_FACTORS)
+  const FACTORS = [[-1, -1, -1], [-1, 1, 1], [1, -1, 1], [1, 1, -1]];
+  const MOTORS = [
+    { id: 'M1', place: 'قدام شمال', blue: 'T2', pins: [3, 2] },
+    { id: 'M2', place: 'قدام يمين', blue: 'T1', pins: [9, 8] },
+    { id: 'M3', place: 'ورا شمال', blue: 'T4', pins: [13, 12] },
+    { id: 'M4', place: 'ورا يمين', blue: 'T3', pins: [11, 10] },
+    { id: 'M5', place: 'رأسي شمال', blue: 'T5/T6', pins: [43, 44] },
+    { id: 'M6', place: 'رأسي يمين', blue: 'T5/T6', pins: [46, 47] },
+  ];
+  const direction = [1, 1, 1, 1, 1, 1];   // MOTOR_DIRECTION
+
+  // Python round(): half to even
+  const pyRound = x => (Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  function mix(forward, right, turn, up, hPct, vPct) {
+    const HMAX = Math.trunc(MAX_SPEED * hPct / 100);
+    const VMAX = Math.trunc(MAX_SPEED * vPct / 100);
+    const raw = FACTORS.map(([f, r, t]) => forward * f + right * r + turn * t);
+    const biggest = Math.max(1, ...raw.map(Math.abs));
+    const speeds = raw.map(v => v / biggest * HMAX).concat([up * VMAX, up * VMAX]);
+    const intended = speeds.map(s => pyRound(clamp(s, -MAX_SPEED, MAX_SPEED)));
+    const sent = speeds.map((s, i) => pyRound(clamp(s * direction[i], -MAX_SPEED, MAX_SPEED)));
+    return { raw, biggest, intended, sent };
+  }
+
+  // ===== Geometry (screen: x right, y down, nose up) =====
+  const S = Math.SQRT1_2;
+  const POS = [[-100, -125], [100, -125], [-100, 125], [100, 125]];            // FL FR RL RR
+  // Thruster front direction on screen (from ArduSub vectored frame factors)
+  const FRONT = FACTORS.map(([f, r]) => [r * S, -f * S]);
+  const VPOS = [[-122, 0], [122, 0]];
+
+  function physics(intended) {
+    let fx = 0, fy = 0, tq = 0;
+    for (let i = 0; i < 4; i++) {
+      const k = intended[i] / MAX_SPEED;
+      const Fx = k * FRONT[i][0], Fy = k * FRONT[i][1];
+      fx += Fx; fy += Fy;
+      // turn-right torque (clockwise on screen) with vehicle coords fwd=-y, right=x
+      const pf = -POS[i][1], pr = POS[i][0], Ff = -Fy, Fr = Fx;
+      tq += pf * Fr - pr * Ff;
+    }
+    return { fwd: -fy, right: fx, turn: tq, up: (intended[4] + intended[5]) / (2 * MAX_SPEED) };
+  }
+  const FMAX = 4 * S;
+  const TMAX = Math.abs(physics(mix(0, 0, 1, 0, 100, 100).intended).turn);
+
+  // ===== SVG helpers =====
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, parent) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+  function markers(svg, prefix) {
+    const defs = el('defs', {}, svg);
+    for (const [name, color] of [['push', '--push'], ['pull', '--pull'], ['water', '--water'], ['result', '--result']]) {
+      const m = el('marker', { id: `${prefix}-${name}`, viewBox: '0 0 10 10', refX: 6, refY: 5,
+        markerWidth: name === 'result' ? 4 : 5, markerHeight: name === 'result' ? 4 : 5, orient: 'auto-start-reverse' }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 z', style: `fill:var(${color})` }, m);
+    }
+  }
+  const setLine = (line, x1, y1, x2, y2, show) => {
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1); line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.style.display = show ? '' : 'none';
+  };
+
+  // ===== Build top view =====
+  const top = document.getElementById('topView');
+  markers(top, 't');
+  el('rect', { x: -112, y: -165, width: 224, height: 330, rx: 28, style: 'fill:var(--hull);stroke:var(--hull-edge);stroke-width:2' }, top);
+  el('rect', { x: -34, y: -120, width: 68, height: 240, rx: 30, style: 'fill:none;stroke:var(--hull-edge);stroke-width:1.5;stroke-dasharray:4 4' }, top);
+  el('path', { d: 'M-22,-182 L0,-204 L22,-182', style: 'fill:none;stroke:var(--muted);stroke-width:3;stroke-linecap:round;stroke-linejoin:round' }, top);
+  const tFront = el('text', { x: 0, y: -214, 'text-anchor': 'middle', style: 'fill:var(--muted);font-size:15px;font-weight:600' }, top);
+  tFront.textContent = 'المقدمة';
+
+  const thr = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = POS[i], [dx, dy] = FRONT[i];
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    const water = el('line', { class: 'water', style: 'stroke:var(--water);stroke-width:4;stroke-linecap:round', 'marker-end': 'url(#t-water)' }, top);
+    const force = el('line', { style: 'stroke-width:6;stroke-linecap:round' }, top);
+    const g = el('g', { transform: `translate(${x} ${y}) rotate(${ang})` }, top);
+    el('rect', { x: -34, y: -15, width: 9, height: 30, rx: 3, style: 'fill:var(--surface);stroke:var(--ink);stroke-width:2' }, g);
+    el('rect', { x: -26, y: -11, width: 40, height: 22, rx: 4, style: 'fill:var(--surface);stroke:var(--ink);stroke-width:2' }, g);
+    el('circle', { cx: 14, cy: 0, r: 11, style: 'fill:var(--surface);stroke:var(--ink);stroke-width:2' }, g);
+    const lx = x + (x < 0 ? -62 : 62), ly = y + (y < 0 ? -40 : 46);
+    const name = el('text', { x: lx, y: ly, 'text-anchor': 'middle', style: 'fill:var(--ink);font-size:17px;font-weight:700' }, top);
+    name.textContent = MOTORS[i].id;
+    const state = el('text', { x: lx, y: ly + 20, 'text-anchor': 'middle', style: 'font-size:14px;font-weight:600' }, top);
+    thr.push({ water, force, state });
+  }
+  const vert = [];
+  for (let i = 0; i < 2; i++) {
+    const [x, y] = VPOS[i];
+    el('circle', { cx: x, cy: y, r: 17, style: 'fill:var(--surface);stroke:var(--ink);stroke-width:2' }, top);
+    const sym = el('g', {}, top);
+    const lab = el('text', { x: x + (x < 0 ? 4 : -4), y: y + 40, 'text-anchor': 'middle', style: 'fill:var(--ink);font-size:14px;font-weight:700' }, top);
+    lab.textContent = MOTORS[4 + i].id;
+    vert.push({ x, y, sym });
+  }
+  const resArrow = el('line', { style: 'stroke:var(--result);stroke-width:13;stroke-linecap:round', 'marker-end': 'url(#t-result)' }, top);
+  const yawArc = el('path', { style: 'fill:none;stroke:var(--result);stroke-width:7;stroke-linecap:round', 'marker-end': 'url(#t-result)' }, top);
+  el('circle', { cx: 0, cy: 0, r: 5, style: 'fill:var(--result)' }, top);
+
+  // ===== Build rear view =====
+  const rear = document.getElementById('rearView');
+  markers(rear, 'r');
+  el('line', { x1: -195, y1: -95, x2: 195, y2: -95, style: 'stroke:var(--water);stroke-width:1;stroke-dasharray:3 6;opacity:.6' }, rear);
+  el('rect', { x: -112, y: -48, width: 224, height: 96, rx: 16, style: 'fill:var(--hull);stroke:var(--hull-edge);stroke-width:2' }, rear);
+  const rearParts = [];
+  for (let i = 0; i < 2; i++) {
+    const x = i === 0 ? -140 : 140;
+    const water = el('line', { class: 'water', style: 'stroke:var(--water);stroke-width:4;stroke-linecap:round', 'marker-end': 'url(#r-water)' }, rear);
+    const force = el('line', { style: 'stroke-width:6;stroke-linecap:round' }, rear);
+    el('rect', { x: x - 14, y: -22, width: 28, height: 44, rx: 6, style: 'fill:var(--surface);stroke:var(--ink);stroke-width:2' }, rear);
+    const lab = el('text', { x, y: 6, 'text-anchor': 'middle', style: 'fill:var(--ink);font-size:13px;font-weight:700' }, rear);
+    lab.textContent = MOTORS[4 + i].id;
+    const side = el('text', { x, y: 140, 'text-anchor': 'middle', style: 'fill:var(--muted);font-size:13px' }, rear);
+    side.textContent = i === 0 ? 'شمال' : 'يمين';
+    rearParts.push({ x, water, force });
+  }
+  const rearRes = el('line', { style: 'stroke:var(--result);stroke-width:12;stroke-linecap:round', 'marker-end': 'url(#r-result)' }, rear);
+  const rearNote = el('text', { x: 0, y: 140, 'text-anchor': 'middle', style: 'fill:var(--muted);font-size:12px' }, rear);
+  rearNote.textContent = 'إنت واقف ورا الـ ROV وباصص لقدام';
+
+  // ===== Table + fix toggles =====
+  const rows = document.getElementById('rows');
+  const rowEls = MOTORS.map((m, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><b>${m.id}</b></td><td>${m.place}</td><td class="num">${m.blue}</td>
+      <td class="eq"></td><td class="num"></td><td class="num"></td><td></td><td></td>`;
+    rows.appendChild(tr);
+    return tr.children;
+  });
+  const fixGrid = document.getElementById('fixGrid');
+  MOTORS.forEach((m, i) => {
+    const lab = document.createElement('label');
+    lab.innerHTML = `<input type="checkbox" id="fix${i}"> ${m.id} معكوس`;
+    fixGrid.appendChild(lab);
+    lab.querySelector('input').addEventListener('change', e => { direction[i] = e.target.checked ? -1 : 1; update(); });
+  });
+
+  // ===== Inputs =====
+  const $ = id => document.getElementById(id);
+  const inputs = { forward: $('inForward'), right: $('inRight'), turn: $('inTurn'), up: $('inUp'), h: $('inH'), v: $('inV') };
+  const outs = { forward: $('outForward'), right: $('outRight'), turn: $('outTurn'), up: $('outUp'), h: $('outH'), v: $('outV') };
+  Object.values(inputs).forEach(inp => inp.addEventListener('input', update));
+  document.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => {
+    const [f, r, t, u] = b.dataset.p.split(',').map(Number);
+    inputs.forward.value = f; inputs.right.value = r; inputs.turn.value = t; inputs.up.value = u; update();
+  }));
+
+  function setupPad(padId, knobId, xKey, yKey) {
+    const pad = $(padId), knob = $(knobId);
+    let drag = false;
+    const move = e => {
+      const r = pad.getBoundingClientRect();
+      let x = (e.clientX - r.left) / r.width * 2 - 1, y = (e.clientY - r.top) / r.height * 2 - 1;
+      const len = Math.hypot(x, y); if (len > 1) { x /= len; y /= len; }
+      inputs[xKey].value = Math.round(x * 100); inputs[yKey].value = Math.round(-y * 100); update();
+    };
+    pad.addEventListener('pointerdown', e => { drag = true; pad.setPointerCapture(e.pointerId); move(e); });
+    pad.addEventListener('pointermove', e => { if (drag) move(e); });
+    pad.addEventListener('pointerup', () => { drag = false; });
+    pad.addEventListener('dblclick', () => { inputs[xKey].value = 0; inputs[yKey].value = 0; update(); });
+    return () => {
+      const x = inputs[xKey].value / 100, y = -inputs[yKey].value / 100;
+      knob.style.left = `${50 + x * 34}%`; knob.style.top = `${50 + y * 34}%`;
+    };
+  }
+  const drawLeft = setupPad('padLeft', 'knobLeft', 'turn', 'forward');
+  const drawRight = setupPad('padRight', 'knobRight', 'right', 'up');
+
+  const fmt = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
+  const pct = v => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(Math.round(v))}%`;
+
+  function stateText(v, vertical) {
+    if (v === 0) return ['واقف', 'stop'];
+    const p = Math.round(Math.abs(v) / MAX_SPEED * 100);
+    if (vertical) return v > 0 ? [`دفع لفوق ${p}%`, 'push'] : [`سحب لتحت ${p}%`, 'pull'];
+    return v > 0 ? [`دفع ${p}%`, 'push'] : [`سحب ${p}%`, 'pull'];
+  }
+
+  function update() {
+    const f = inputs.forward.value / 100, r = inputs.right.value / 100, t = inputs.turn.value / 100, u = inputs.up.value / 100;
+    const hP = +inputs.h.value, vP = +inputs.v.value;
+    outs.forward.textContent = pct(f * 100); outs.right.textContent = pct(r * 100);
+    outs.turn.textContent = pct(t * 100); outs.up.textContent = pct(u * 100);
+    outs.h.textContent = `${hP}%`; outs.v.textContent = `${vP}%`;
+    drawLeft(); drawRight();
+
+    const m = mix(f, r, t, u, hP, vP);
+    const ph = physics(m.intended);
+
+    // Horizontal thrusters
+    for (let i = 0; i < 4; i++) {
+      const v = m.intended[i], k = Math.abs(v) / MAX_SPEED, sgn = Math.sign(v);
+      const [x, y] = POS[i], [dx, dy] = FRONT[i];
+      const color = v > 0 ? 'var(--push)' : 'var(--pull)';
+      const L = 18 + 62 * k;
+      const sx = x + dx * sgn * 26, sy = y + dy * sgn * 26;
+      setLine(thr[i].force, sx, sy, sx + dx * sgn * L, sy + dy * sgn * L, v !== 0);
+      thr[i].force.style.stroke = color;
+      thr[i].force.setAttribute('marker-end', v > 0 ? 'url(#t-push)' : 'url(#t-pull)');
+      const wx = x - dx * sgn * 38, wy = y - dy * sgn * 38, WL = 14 + 36 * k;
+      setLine(thr[i].water, wx, wy, wx - dx * sgn * WL, wy - dy * sgn * WL, v !== 0);
+      const [txt, cls] = stateText(v, false);
+      thr[i].state.textContent = txt;
+      thr[i].state.style.fill = cls === 'push' ? 'var(--push)' : cls === 'pull' ? 'var(--pull)' : 'var(--muted)';
+    }
+    // Vertical thrusters (top view symbols)
+    for (let i = 0; i < 2; i++) {
+      const v = m.intended[4 + i], { x, y, sym } = vert[i];
+      sym.innerHTML = '';
+      const color = v > 0 ? 'var(--push)' : v < 0 ? 'var(--pull)' : 'var(--muted)';
+      if (v > 0) el('circle', { cx: x, cy: y, r: 6, style: `fill:${color}` }, sym);
+      else if (v < 0) el('path', { d: `M${x - 8},${y - 8} L${x + 8},${y + 8} M${x + 8},${y - 8} L${x - 8},${y + 8}`, style: `stroke:${color};stroke-width:3.5;stroke-linecap:round` }, sym);
+    }
+    // Resultant
+    const scale = 150 / FMAX;
+    const rx = ph.right * scale, ry = -ph.fwd * scale;
+    setLine(resArrow, 0, 0, rx, ry, Math.hypot(ph.right, ph.fwd) > 0.03);
+    const tn = TMAX ? ph.turn / TMAX : 0;
+    if (Math.abs(tn) > 0.02) {
+      const R = 82, sweep = Math.min(Math.abs(tn), 1) * 200 * Math.PI / 180;
+      const a0 = -Math.PI / 2, a1 = a0 + Math.sign(tn) * sweep;
+      const large = sweep > Math.PI ? 1 : 0, cw = tn > 0 ? 1 : 0;
+      yawArc.setAttribute('d', `M${R * Math.cos(a0)},${R * Math.sin(a0)} A${R},${R} 0 ${large} ${cw} ${R * Math.cos(a1)},${R * Math.sin(a1)}`);
+      yawArc.style.display = '';
+    } else yawArc.style.display = 'none';
+
+    // Rear view
+    for (let i = 0; i < 2; i++) {
+      const v = m.intended[4 + i], k = Math.abs(v) / MAX_SPEED, sgn = Math.sign(v), p = rearParts[i];
+      const color = v > 0 ? 'var(--push)' : 'var(--pull)';
+      const L = 14 + 60 * k;
+      setLine(p.force, p.x, -sgn * 28, p.x, -sgn * (28 + L), v !== 0);
+      p.force.style.stroke = color;
+      p.force.setAttribute('marker-end', v > 0 ? 'url(#r-push)' : 'url(#r-pull)');
+      setLine(p.water, p.x, sgn * 30, p.x, sgn * (30 + 12 + 40 * k), v !== 0);
+    }
+    setLine(rearRes, 0, 0, 0, -ph.up * 95, Math.abs(ph.up) > 0.02);
+
+    // Summary
+    const parts = [];
+    const add = (val, pos, neg, full) => { const p = Math.round(Math.abs(val) / full * 100); if (p >= 3) parts.push(`${val > 0 ? pos : neg} ${p}%`); };
+    add(ph.fwd, 'لقدام', 'لورا', FMAX);
+    add(ph.right, 'انزلاق يمين', 'انزلاق شمال', FMAX);
+    add(ph.turn, 'لف يمين', 'لف شمال', TMAX);
+    add(ph.up, 'طلوع', 'نزول', 1);
+    $('summary').innerHTML = parts.length ? parts.map(p => `<span class="pill res">${p}</span>`).join(' ') : '<span class="pill stop">واقف</span>';
+
+    // Table
+    const terms = [f, r, t];
+    MOTORS.forEach((mo, i) => {
+      const c = rowEls[i];
+      if (i < 4) {
+        const fac = FACTORS[i];
+        const sym = ['F', 'R', 'T'];
+        const exp = fac.map((k, j) => `${k > 0 ? '+' : '−'}${sym[j]}`).join(' ');
+        const nums = fac.map((k, j) => fmt(k * terms[j])).join(' ');
+        c[3].innerHTML = `${exp} = ${nums} = <b>${fmt(m.raw[i])}</b>`;
+        c[4].textContent = `${fmt(m.raw[i] / m.biggest)} × ${Math.trunc(MAX_SPEED * hP / 100)}`;
+      } else {
+        c[3].innerHTML = `U = <b>${fmt(u)}</b>`;
+        c[4].textContent = `${fmt(u)} × ${Math.trunc(MAX_SPEED * vP / 100)}`;
+      }
+      const sent = m.sent[i];
+      c[5].innerHTML = `<b>${sent}</b>${direction[i] === -1 ? ' <span class="pill pull">معكوس</span>' : ''}`;
+      c[6].innerHTML = sent > 0 ? `R (بن <span class="mono">${mo.pins[0]}</span>)` : sent < 0 ? `L (بن <span class="mono">${mo.pins[1]}</span>)` : '—';
+      const [txt, cls] = stateText(m.intended[i], i >= 4);
+      c[7].innerHTML = `<span class="pill ${cls}">${txt}</span>`;
+    });
+    $('normNote').textContent = m.biggest > 1
+      ? `F = لقدام، R = انزلاق يمين، T = لف يمين، U = طلوع. أكبر قيمة طلعت ${m.biggest.toFixed(2)} (أكتر من 1)، فالأربع موتورز الأفقية اتقسموا عليها مع بعض عشان النسبة بينهم تفضل صح.`
+      : 'F = لقدام، R = انزلاق يمين، T = لف يمين، U = طلوع. مفيش قيمة عدّت 1، فمفيش تقسيم.';
+    $('pyLine').textContent = `MOTOR_DIRECTION =            [${direction.join(', ')}]`;
+  }
+
+  $('copyBtn').addEventListener('click', async () => {
+    const text = $('pyLine').textContent;
+    try { await navigator.clipboard.writeText(text); $('copyMsg').textContent = 'اتنسخ. الزقه مكان سطر MOTOR_DIRECTION في كود البايثون.'; }
+    catch { $('copyMsg').textContent = 'المتصفح منع النسخ. حدد السطر وانسخه بإيدك (Ctrl+C).'; }
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>
